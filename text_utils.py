@@ -44,19 +44,32 @@ class TextEncoder(object):
         merges = open(bpe_path).read().split('\n')[1:-1]
         merges = [tuple(merge.split()) for merge in merges]
         self.bpe_ranks = dict(zip(merges, range(len(merges))))
+        # self.bpe_ranks = {..., ('ben', 'teley</w>'): 39998, ('bachel', 'orette</w>'): 39999}
         self.cache = {}
 
     def bpe(self, token):
         word = tuple(token[:-1]) + ( token[-1] + '</w>',)
+        # ex: word = ('s', 'c', 'a', 'r', 'e', 'y</w>')
         if token in self.cache:
             return self.cache[token]
         pairs = get_pairs(word)
+        # ex: pairs = {('e', 'y</w>'), ('a', 'r'), ('r', 'e'), ('c', 'a'), ('s', 'c')}
 
         if not pairs:
             return token+'</w>'
 
         while True:
             bigram = min(pairs, key = lambda pair: self.bpe_ranks.get(pair, float('inf')))
+            ''' ex: 
+              token = scaery 
+              bigram =  
+                ('a', 'r')
+                ('s', 'c')
+                ('e', 'y</w>')
+                ('sc', 'ar')
+                ('scar', 'ey</w>')
+              # totally 4 iterations
+            '''
             if bigram not in self.bpe_ranks:
                 break
             first, second = bigram
@@ -87,6 +100,8 @@ class TextEncoder(object):
         if word == '\n  </w>':
             word = '\n</w>'
         self.cache[token] = word
+        # ex: token = scaery
+        # ex: word = scar ey</w>
         return word
 
     def encode(self, texts, verbose=True):
@@ -94,9 +109,12 @@ class TextEncoder(object):
         if verbose:
             for text in tqdm(texts, ncols=80, leave=False):
                 text = self.nlp(text_standardize(ftfy.fix_text(text)))
+                # ex: text = I decided to rent a movie when ... It was really scarey !
                 text_tokens = []
                 for token in text:
+                    # ex: token = "scarey" ==> "scar ey</w>" ==> [2501, 1159] 
                     text_tokens.extend([self.encoder.get(t, 0) for t in self.bpe(token.text.lower()).split(' ')])
+                # ex: text_tokens = [249, 1925, 485, 6231, ..., 2501, 1159, 267]
                 texts_tokens.append(text_tokens)
         else:
             for text in texts:
